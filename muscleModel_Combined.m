@@ -4,7 +4,7 @@
 % Last update: 12/26/207
 %--------------------------------------------------------------------------
 
-function output = muscleModel_Combined(t,Fs,input,modelParameter,simulationParameter,recruitmentType)
+function output = muscleModel_Combined(t,Fs,input,modelParameter,recruitmentType)
 %--------------------------------------------------------------------------
 % Define model parameters
 %--------------------------------------------------------------------------
@@ -15,6 +15,11 @@ mass = modelParameter.mass; % muscle mass [kg]
 PCSA = (mass*1000)/(density*L0); % PCSA of muscle
 sigma = 31.8; % specific tension
 F0 = PCSA * sigma; % maximal force
+
+Lm_initial = muscle_parameter.muscleInitialLength; % muscle initial length
+Lt_initial = muscle_parameter.tendonInitialLength; % tendon initial length
+Lmt = Lm_initial*cos(alpha)+Lt_initial; % intial musculotendon length
+[Lce,Lse,Lmax] =  InitialLength_function(muscle_parameter);
 
 %--------------------------------------------------------------------------
 % Motor unit architecture
@@ -75,7 +80,7 @@ T_U = 0.03;
 % initialize parameters
 Y_af_temp = 0;
 S_af_temp = zeros(N_MU,1);
-Lce = simulationParameter.Lce;
+
 Vce = 0;
 
 spike_time = zeros(N_MU,1);
@@ -91,6 +96,21 @@ Outputfenv = zeros(N_MU,length(t));
 Outputforce_half= zeros(N_MU,length(t));
 OutputAf = zeros(N_MU,length(t));
 OutputFF = zeros(N_MU,length(t));
+OutputForceTendon = zeros(1,length(targetTrajectory));
+OutputForceMuscle = zeros(1,length(targetTrajectory));
+OutputLse = zeros(1,length(targetTrajectory));
+OutputLce = zeros(1,length(targetTrajectory));
+OutputVce = zeros(1,length(targetTrajectory));
+OutputAce = zeros(1,length(targetTrajectory));
+OutputC = zeros(1,length(targetTrajectory));
+OutputUeff = zeros(1,length(targetTrajectory));
+
+
+
+MuscleAcceleration = zeros(1,length(targetTrajectory));
+MuscleVelocity = zeros(1,length(targetTrajectory));
+MuscleLength = zeros(1,length(targetTrajectory));
+MuscleLength(1) = Lce*L0/100;
 
 %--------------------------------------------------------------------------
 % Simulation
@@ -101,7 +121,7 @@ for i = 1:length(t)
     % Determine firing rate of individual motor units given an input (U)
     if recruitmentType == 1 % linear increase in firing rate up to Ur
         FR_MU(:,i) = (PFR_MU-MFR_MU)./(1-U_th).*(U_eff-U_th) + MFR_MU;
-    elseif recruitmentType == 2 % equal gain across units and saturation 
+    elseif recruitmentType == 2 % equal gain across units and saturation
         FR_MU(:,i) = g_e*(U(i)-U_th)+ MFR_MU;
     end
     % Make FR of units that is below 8 Hz be zero
@@ -121,10 +141,10 @@ for i = 1:length(t)
         S_af_temp(n_sag) = sag_function(S_af_temp(n_sag),force_half(n_sag),Fs);
         S_af(n_sag,i) = S_af_temp(n_sag);
     end
-    % Af 
+    % Af
     for f_temp = 1:N_MU
         if f_temp <= index_slow
-            Af(f_temp) = Af_slow_function(force_half(f_temp),Lce,Y_af(f_temp,i));         
+            Af(f_temp) = Af_slow_function(force_half(f_temp),Lce,Y_af(f_temp,i));
             OutputAf(f_temp,i)= Af(f_temp);
             FF(f_temp) = frequency2Force_slow_function(f_env(f_temp),Lce,Y_af(f_temp,i));
             OutputFF(f_temp,i)= FF(f_temp);
@@ -150,7 +170,7 @@ for i = 1:length(t)
             Z(Z<-3.9) = -3.9;
             spike_time_temp = (mu + mu*cv_MU*Z)*Fs;
             spike_time(n) = round(spike_time_temp) + i;
-                        
+            
             [twitch_temp,~,~] = twitch_function(Af(n),Lce,CT(n),RT(n),Fs);
             twitch =  Pi(n).*twitch_temp*FF(n);
             force_temp = conv(spike_train_temp,twitch);
@@ -167,7 +187,7 @@ for i = 1:length(t)
                 Z(Z<-3.9) = -3.9;
                 spike_time_temp = (mu + mu*cv_MU*Z)*Fs; % interspike interval
                 spike_time(n) = round(spike_time_temp) + i; % spike time of next spike
-                                        
+                
                 [twitch_temp,~,~] = twitch_function(Af(n),Lce,CT(n),RT(n),Fs);
                 twitch =  Pi(n).*twitch_temp*FF(n);
                 force_temp = conv(spike_train_temp,twitch);
@@ -207,11 +227,54 @@ for i = 1:length(t)
         end
         force(n,i) = force(n,i)*FL_temp*FV_temp;
     end
-    force(:,i) = force(:,i);    
+    
+    F_pe2 = Fpe2_function(Lce);
+    if F_pe2 > 0
+        F_pe2 = 0;
+    end
+    ForceTotal = sum(force(:,i)) + Fpe1_function(Lce/Lmax,Vce)*F0 + F_pe2*F0;
+    if ForceTotal < 0
+        ForceTotal = 0;
+    end
+    %*FL(Lce)*FV;
+    % force perturbation
+    % ForceTotal = ForceTotal*F0 + additionalInput(i);
+    % force from series elastic element
+    ForceSE = Fse_function(Lse) * F0;
+    
+    % calculate muscle excursion acceleration based on the difference
+    % between muscle force and tendon force
+    MuscleAcceleration(i+1) = (ForceSE*cos(alpha) - ForceTotal*(cos(alpha)).^2)/(mass) ...
+        + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i));
+    % integrate acceleration to get velocity
+    MuscleVelocity(i+1) = (MuscleAcceleration(i+1)+ ...
+        MuscleAcceleration(i))/2*1/Fs+MuscleVelocity(i);
+    %MuscleVelocity(i+1) = MuscleAcceleration(i+1)*1/Fs+MuscleVelocity(i);
+    % integrate velocity to get length
+    MuscleLength(i+1) = (MuscleVelocity(i+1)+ ...
+        MuscleVelocity(i))/2*1/Fs+MuscleLength(i);
+    %     MuscleLength(i+1) = MuscleAcceleration(i+1)*(1/Fs)^2/2+...
+    %         MuscleVelocity(i+1)*1/Fs+MuscleLength(i);
+    
+    % normalize each variable to optimal muscle length or tendon length
+    Ace = MuscleAcceleration(i+1)/(L0/100);
+    Vce = MuscleVelocity(i+1)/(L0/100);
+    Lce = MuscleLength(i+1)/(L0/100);
+    Lse = (Lmt - Lce*L0*cos(alpha))/L0T;
+    
+    % store data
+    OutputForceMuscle(i) = ForceTotal; % muscle force
+    OutputForceTendon(i) = ForceSE; % tendon force
+    OutputLse(i) = Lse; % normalized tendon length
+    OutputLce(i) = Lce; % normalized muscle length
+    OutputVce(i) = Vce; % normalized muscle excursion velocity
+    OutputAce(i) = Ace; % normalized muscle excursion acceleration
+    OutputC(i) = u_a_C; % Tracking controller input
+    OutputUeff(i) = U; % effective neural drive to muscle
 end
 
-Force = sum(force);
-output.Force_total = Force;
+
+output.Force_total = OutputForceTendon;
 output.force = force;
 output.FR = FR_MU;
 output.spike_train = spike_train;
@@ -258,7 +321,7 @@ output.Y = Y_af;
         n_f = n_f0 + n_f1*(1/L-1);
         Af = 1 - exp(-(S*f_eff/(a_f*n_f))^n_f);
     end
-    
+
     function FF = frequency2Force_slow_function(f_env,L,Y)
         a_f = 0.52;
         n_f0 = 1.97;
@@ -368,6 +431,49 @@ output.Y = Y_af;
         av2 = 0;
         bv = 0.69;
         FVecc = (bv - (av0 + av1*L + av2*L^2)*V)/(bv+V);
+    end
+
+    function Fpe1 = Fpe1_function(L,V)
+        %---------------------------
+        % passive element 1
+        % input: normalized muscle length
+        % output: passive element force (0-1)
+        %---------------------------
+        c1_pe1 = 23;
+        k1_pe1 = 0.046;
+        Lr1_pe1 = 1.17;
+        eta = 0.01;
+        
+        Fpe1 = c1_pe1 * k1_pe1 * log(exp((L - Lr1_pe1)/k1_pe1)+1) + eta*V;
+        
+    end
+
+    function Fpe2 = Fpe2_function(L)
+        %---------------------------
+        % passive element 2
+        % input: normalized muscle length
+        % output: passive element force (0-1)
+        %---------------------------
+        c2_pe2 = -0.02;
+        k2_pe2 = -21;
+        Lr2_pe2 = 0.70;
+        
+        Fpe2 = c2_pe2*exp((k2_pe2*(L-Lr2_pe2))-1);
+        
+    end
+
+    function Fse = Fse_function(LT)
+        %---------------------------
+        % series elastic element (tendon)
+        % input: tendon length
+        % output: tendon force (0-1)
+        %---------------------------
+        cT_se = 27.8; %27.8
+        kT_se = 0.0047;
+        LrT_se = 0.964;
+        
+        Fse = cT_se * kT_se * log(exp((LT - LrT_se)/kT_se)+1);
+        
     end
 
 end
