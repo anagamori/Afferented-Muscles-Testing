@@ -267,6 +267,7 @@ for i = 1:length(t)
     OutputVce(i) = Vce; % normalized muscle excursion velocity
     OutputAce(i) = Ace; % normalized muscle excursion acceleration
     OutputUeff(i) = U_eff; % effective neural drive to muscle
+    
 end
 
 
