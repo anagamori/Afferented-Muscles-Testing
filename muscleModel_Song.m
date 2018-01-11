@@ -118,8 +118,8 @@ for i = 1:length(t)
     
     % firing frequency input to second-order excitation dynamics of
     % slow-twitch fiber
-    if U(i) >=  U1_th
-        f_env_slow = (fmax-fmin)/(1-U1_th).*(U(i)-U1_th)+fmin;
+    if U_eff >=  U1_th
+        f_env_slow = (fmax-fmin)/(1-U1_th).*(U_eff-U1_th)+fmin;
         f_env_slow = f_env_slow/f_half;
     else
         f_env_slow = 0;
@@ -128,8 +128,8 @@ for i = 1:length(t)
     [f_int_slow,~] = f_slow_function(f_int_slow,f_env_slow,f_env_slow,f_eff_slow_dot,Af_slow,Lce,Fs);
     [f_eff_slow,f_eff_slow_dot] = f_slow_function(f_eff_slow,f_int_slow,f_env_slow,f_eff_slow_dot,Af_slow,Lce,Fs);
     
-    if U(i) >= U2_th
-        f_env_fast = (fmax_fast-fmin_fast)/(1-U2_th).*(U(i)-U2_th)+fmin_fast;
+    if U_eff >= U2_th
+        f_env_fast = (fmax_fast-fmin_fast)/(1-U2_th).*(U_eff-U2_th)+fmin_fast;
         f_env_fast = f_env_fast/f_half_fast;
     else
         f_env_fast = 0;
@@ -165,7 +165,7 @@ for i = 1:length(t)
     if Vce <= 0 % concentric
         FV1 = FVcon(Lce,Vce);
         FV2 = FVcon_fast(Lce,Vce);
-    elseif V > 0 % eccentric
+    elseif Vce > 0 % eccentric
         FV1 = FVecc(Lce,Vce);
         FV2 = FVecc_fast(Lce,Vce);
     end
@@ -178,7 +178,7 @@ for i = 1:length(t)
         FP2 = 0;
     end
     
-    Fce = U_eff*((W1*Af_slow*FL1*FV1+FP2) + (W2*Af_fast*FL2*FV2+FP2));
+    Fce = U_eff*((W1*Af_slow*(FL1*FV1+FP2)) + (W2*Af_fast*(FL2*FV2+FP2)));
     if Fce < 0
         Fce = 0;
     elseif Fce > 1
@@ -210,12 +210,14 @@ for i = 1:length(t)
     Lce = MuscleLength(i+1)/(L0/100);
     Lse = (Lmt - Lce*L0*cos(alpha))/L0T;
     
+    OutoutForceTendon(i) = ForceSE;
     OutputLse(i) = Lse; % normalized tendon length
     OutputLce(i) = Lce; % normalized muscle length
     OutputVce(i) = Vce; % normalized muscle excursion velocity
     OutputAce(i) = Ace; % normalized muscle excursion acceleration
 end
 
+output.Force_tendon = OutoutForceTendon;
 output.Force_total = Force;
 output.Force_slow = Force_slow;
 output.Force_fast = Force_fast;
@@ -229,6 +231,8 @@ output.S = S_vec;
 output.Y = Y_vec;
 output.Af_slow = Af_slow_vec;
 output.Af_fast = Af_fast_vec;
+output.Lce = OutputLce;
+output.Vce = OutputVce;
 
 %--------------------------------------------------------------------------
 % function used in simulation
