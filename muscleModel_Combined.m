@@ -203,7 +203,7 @@ for i = 1:length(t)
                 spike_time_temp = (mu + mu*cv_MU*Z)*Fs; % interspike interval
                 spike_time(n) = round(spike_time_temp) + i; % spike time of next spike
                 
-                %force_temp = conv(spike_train_temp,g.*twitch(n,:)).*FL_temp.*FV_temp.*Af;
+                % force_temp = conv(spike_train_temp,g.*twitch(n,:)).*FL_temp.*FV_temp.*Af;
                 [twitch_temp,~,~] = twitch_function(Af(n),Lce,CT(n),RT(n),Fs);
                 twitch =  Pi(n).*twitch_temp*FF(n);
                 force_temp = conv(spike_train_temp,twitch);
