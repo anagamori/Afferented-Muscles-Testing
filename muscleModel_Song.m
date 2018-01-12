@@ -20,7 +20,7 @@ L0T = L_tendon*1.05; % optimal tendon length
 density = 1.06;
 mass = modelParameter.mass; % muscle mass [kg]
 PCSA = (mass*1000)/(density*L0); % PCSA of muscle
-sigma = 31.8; % specific tension
+sigma = 50; % specific tension
 F0 = PCSA * sigma; % maximal force
 
 Ur = 0.8; % fractional activation level at which all motor units for a given muscle are recruited (0-1)

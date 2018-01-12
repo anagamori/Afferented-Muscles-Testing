@@ -4,7 +4,11 @@
 % Last update: 12/20/207
 %--------------------------------------------------------------------------
 
-function output = muscleModel_Song_v2(t,Fs,input,modelParameter)
+function output = muscleModel_Song_v4(t,Fs,input,modelParameter)
+
+mass_ext = 100000;
+k_ext = 100;
+b_ext = 1;
 
 % model parameters
 alpha = modelParameter.pennationAngle; % pennation angle
@@ -61,6 +65,9 @@ S = 0;
 
 Vce = 0; % muscle excursion velocity
 
+x_ext_dot = 0;
+x_ext = 0.02; %Lmt-Lt_initial;
+
 %--------------------------------------------------------------------------
 % storing variables
 f_env_slow_vec = zeros(1,length(t));
@@ -85,8 +92,7 @@ Force_fast = zeros(1,length(t));
 OutputLse = zeros(1,length(t));
 OutputLce = zeros(1,length(t));
 OutputVce = zeros(1,length(t));
-OutputAce = zeros(1,length(t));
-MuscleAcceleration = zeros(1,length(t));
+OutputLmt = zeros(1,length(t));
 MuscleVelocity = zeros(1,length(t));
 MuscleLength = zeros(1,length(t));
 MuscleLength(1) = Lce*L0/100;
@@ -145,7 +151,10 @@ for i = 1:length(t)
     Af_slow = Af_slow_function(f_eff_slow,Lce,Y);
     Af_fast = Af_fast_function(f_eff_fast,Lce,S);
     
-    % activation dependent force of contractile elements   
+    % activation dependent force of contractile elements
+    
+    
+    
     f_env_slow_vec(i) = f_env_slow;
     f_int_slow_vec(i) = f_int_slow;
     f_eff_slow_vec(i) = f_eff_slow;
@@ -202,27 +211,33 @@ for i = 1:length(t)
     k_3 = h*(MuscleVelocity(i)+l_2);
     l_3 = h*((ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
         + (MuscleVelocity(i)+l_2).^2*tan(alpha).^2/(MuscleLength(i)+k_2));
+    
     MuscleLength(i+1) = MuscleLength(i) + 1/6*(k_0+2*k_1+2*k_2+k_3);
     MuscleVelocity(i+1) = MuscleVelocity(i) + 1/6*(l_0+2*l_1+2*l_2+l_3);
     % calculate muscle excursion acceleration based on the difference
     % between muscle force and tendon force
-    MuscleAcceleration(i+1) = (ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
-        + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i)+k_0/2);
-    % integrate acceleration to get velocity
-    % MuscleVelocity(i+1) = (MuscleAcceleration(i+1)+ ...
-    %   MuscleAcceleration(i))/2*1/Fs+MuscleVelocity(i);
-     % normalize each variable to optimal muscle length or tendon length
-    Ace = MuscleAcceleration(i+1)/(L0/100);
+    
     Vce = MuscleVelocity(i+1)/(L0/100);
     Lce = MuscleLength(i+1)/(L0/100);
-    Lse = (Lmt - Lce*L0*cos(alpha))/L0T;
+    Lse = (Lmt -x_ext - Lce*L0*cos(alpha))/L0T;
+    
+    k_0_ext = h*x_ext_dot;
+    l_0_ext = h*((-k_ext*x_ext-b_ext*x_ext_dot+ForceSE)./mass_ext);
+    k_1_ext = h*(x_ext_dot+l_0_ext/2);
+    l_1_ext = h*((-k_ext*(x_ext+k_0_ext/2)-b_ext*(x_ext_dot+l_0_ext/2)+ForceSE)./mass_ext);
+    k_2_ext = h*(x_ext_dot+l_1_ext/2);
+    l_2_ext = h*((-k_ext*(x_ext+k_1_ext/2)-b_ext*(x_ext_dot+l_1_ext/2)+ForceSE)./mass_ext);
+    k_3_ext = h*(x_ext_dot+l_2_ext);
+    l_3_ext = h*((-k_ext*(x_ext+k_2_ext)-b_ext*(x_ext_dot+l_2_ext)+ForceSE)./mass_ext);
+    
+    x_ext = x_ext + 1/6*(k_0_ext+2*k_1_ext+2*k_2_ext+k_3_ext);
+    x_ext_dot = x_ext_dot + 1/6*(l_0_ext+2*l_1_ext+2*l_2_ext+l_3_ext);
     
     OutoutForceTendon(i) = ForceSE;
     OutputLse(i) = Lse; % normalized tendon length
     OutputLce(i) = Lce; % normalized muscle length
     OutputVce(i) = Vce; % normalized muscle excursion velocity
-    OutputAce(i) = Ace; % normalized muscle excursion acceleration
-    OutputLmt(i) = Lmt; % normalized muscle excursion velocity
+    OutputLmt(i) = x_ext;
 end
 
 output.Force_tendon = OutoutForceTendon;

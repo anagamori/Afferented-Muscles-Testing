@@ -1,6 +1,6 @@
-% close all
-% clear all
-% clc
+close all
+clear all
+clc
 
 codeFolder = '/Users/akira/Documents/Github/Afferented-Muscles-Testing';
 dataFolder = '/Volumes/DATA2/TwoMuscleSystemData/CombinedModel/ModelTesting';
@@ -15,40 +15,57 @@ load('alpha')
 modelParameter.alpha = alpha;
 simulationParameter.Lce = 1;
 
-Fs = 20000;
+Fs = 10000;
 t = 0:1/Fs:5;
 amp_temp = 0.1:0.1:1;
 
-for i = 10 %length(amp_temp)
+for i = 1 %length(amp_temp)
 amp = amp_temp(i);
 trialN = i;
-input = [zeros(1,1*Fs) amp*[0:1/Fs:1] amp*ones(1,3*Fs)];
+input = [zeros(1,1*Fs) amp*[0:1/Fs:1] amp*ones(1,length(t)-1*Fs-length(amp*[0:1/Fs:1]))];
 %input = 0.3*sin(2*pi*1.*t-pi/2)+0.4;
     
-output_1 = muscleModel_Song(t,Fs,input,modelParameter);
+output_1 = muscleModel_Song_v2(t,Fs,input,modelParameter);
+% output_2 = muscleModel_Song(t,Fs,input,modelParameter);
 % output_2 = muscleModel_Tsianos(t,Fs,input,modelParameter,simulationParameter);
-output_3 = muscleModel_Combined(t,Fs,input,modelParameter,1);
+output_3 = muscleModel_Combined_v2(t,Fs,input,modelParameter,1);
 
-maxForce1(i) =  mean(output_1.Force_tendon(4*Fs:5*Fs));
+% maxForce1(i) =  mean(output_1.Force_tendon(4*Fs:5*Fs));
 % maxForce2(i) = mean(output_2.Force_total(6*Fs:7*Fs));
-maxForce3(i) = mean(output_3.Force_total(4*Fs:5*Fs));
-CoV(i) = std(output_3.Force_total(4*Fs:5*Fs))/mean(output_3.Force_total(4*Fs:5*Fs));
+% maxForce3(i) = mean(output_3.Force_total(4*Fs:5*Fs));
+% CoV(i) = std(output_3.Force_total(4*Fs:5*Fs))/mean(output_3.Force_total(4*Fs:5*Fs));
 
 %%
 figure(1)
 plot(t,output_1.Force_tendon)
 hold on 
+% plot(t,output_2.Force_tendon)
+title('Tendon Force')
+
+figure(2)
+plot(t,output_1.Force_total)
+title('Muscle Force')
+
+figure(3)
+plot(t,output_1.Lce)
+title('Muscle Length')
+
+figure(4)
+plot(t,output_1.Lmt)
+title('Muscle-Tendon Length')
+% hold on 
+% plot(t,output_2.Force_total)
 % plot(t,output_2.Force_total)
 % hold on 
-plot(t,output_3.Force_total)
-hold on 
-%plot(t,output_3.Force_total)
-
-cd (dataFolder)
-save(['output_Song_' num2str(trialN)],'output_1')
-%save(['output_Tsianos_' num2str(trialN)],'output_2')
-% save(['output_MU_' num2str(trialN)],'output_3','-v7.3')
-cd (codeFolder)
+% plot(t,output_3.Force_total)
+% hold on 
+% %plot(t,output_3.Force_total)
+% 
+% cd (dataFolder)
+% save(['output_Song_' num2str(trialN)],'output_1')
+% %save(['output_Tsianos_' num2str(trialN)],'output_2')
+% % save(['output_MU_' num2str(trialN)],'output_3','-v7.3')
+% cd (codeFolder)
 end
 
 %figure(2)

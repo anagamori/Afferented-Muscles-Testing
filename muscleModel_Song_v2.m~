@@ -4,7 +4,7 @@
 % Last update: 12/20/207
 %--------------------------------------------------------------------------
 
-function output = muscleModel_Song_v2(t,Fs,input,modelParameter)
+function output = muscleModel_Song(t,Fs,input,modelParameter)
 
 % model parameters
 alpha = modelParameter.pennationAngle; % pennation angle
@@ -20,7 +20,7 @@ L0T = L_tendon*1.05; % optimal tendon length
 density = 1.06;
 mass = modelParameter.mass; % muscle mass [kg]
 PCSA = (mass*1000)/(density*L0); % PCSA of muscle
-sigma = 31.8; % 31.8 specific tension
+sigma = 31.8; % specific tension
 F0 = PCSA * sigma; % maximal force
 
 Ur = 0.8; % fractional activation level at which all motor units for a given muscle are recruited (0-1)
@@ -145,7 +145,10 @@ for i = 1:length(t)
     Af_slow = Af_slow_function(f_eff_slow,Lce,Y);
     Af_fast = Af_fast_function(f_eff_fast,Lce,S);
     
-    % activation dependent force of contractile elements   
+    % activation dependent force of contractile elements
+    
+    
+    
     f_env_slow_vec(i) = f_env_slow;
     f_int_slow_vec(i) = f_int_slow;
     f_eff_slow_vec(i) = f_eff_slow;
@@ -195,23 +198,22 @@ for i = 1:length(t)
         + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i)));
     k_1 = h*(MuscleVelocity(i)+l_0/2);
     l_1 = h*((ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
-        + (MuscleVelocity(i)+l_0/2).^2*tan(alpha).^2/(MuscleLength(i)+k_0/2));
-    k_2 = h*(MuscleVelocity(i)+l_1/2);
-    l_2 = h*((ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
-        + (MuscleVelocity(i)+l_1/2).^2*tan(alpha).^2/(MuscleLength(i)+k_1/2));
-    k_3 = h*(MuscleVelocity(i)+l_2);
-    l_3 = h*((ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
-        + (MuscleVelocity(i)+l_2).^2*tan(alpha).^2/(MuscleLength(i)+k_2));
-    MuscleLength(i+1) = MuscleLength(i) + 1/6*(k_0+2*k_1+2*k_2+k_3);
-    MuscleVelocity(i+1) = MuscleVelocity(i) + 1/6*(l_0+2*l_1+2*l_2+l_3);
+        + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i)));
     % calculate muscle excursion acceleration based on the difference
     % between muscle force and tendon force
     MuscleAcceleration(i+1) = (ForceSE*cos(alpha) - Force(i)*(cos(alpha)).^2)/(mass) ...
-        + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i)+k_0/2);
+        + (MuscleVelocity(i)).^2*tan(alpha).^2/(MuscleLength(i));
     % integrate acceleration to get velocity
     % MuscleVelocity(i+1) = (MuscleAcceleration(i+1)+ ...
     %   MuscleAcceleration(i))/2*1/Fs+MuscleVelocity(i);
-     % normalize each variable to optimal muscle length or tendon length
+    MuscleVelocity(i+1) = MuscleAcceleration(i+1)*1/Fs+MuscleVelocity(i);
+    % integrate velocity to get length
+%     MuscleLength(i+1) = (MuscleVelocity(i+1)+ ...
+%        MuscleVelocity(i))/2*1/Fs+MuscleLength(i);
+    MuscleLength(i+1) = MuscleAcceleration(i+1)*(1/Fs)^2/2+...
+       MuscleVelocity(i+1)*1/Fs+MuscleLength(i);
+    
+    % normalize each variable to optimal muscle length or tendon length
     Ace = MuscleAcceleration(i+1)/(L0/100);
     Vce = MuscleVelocity(i+1)/(L0/100);
     Lce = MuscleLength(i+1)/(L0/100);
@@ -222,7 +224,6 @@ for i = 1:length(t)
     OutputLce(i) = Lce; % normalized muscle length
     OutputVce(i) = Vce; % normalized muscle excursion velocity
     OutputAce(i) = Ace; % normalized muscle excursion acceleration
-    OutputLmt(i) = Lmt; % normalized muscle excursion velocity
 end
 
 output.Force_tendon = OutoutForceTendon;
@@ -241,7 +242,7 @@ output.Af_slow = Af_slow_vec;
 output.Af_fast = Af_fast_vec;
 output.Lce = OutputLce;
 output.Vce = OutputVce;
-output.Lmt = OutputLmt;
+
 %--------------------------------------------------------------------------
 % function used in simulation
     function Y = yield_function(Y,V,Fs)
